@@ -3,9 +3,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_ffmpeg/flutter_ffmpeg.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:audio_picker/audio_picker.dart';
+import 'package:flutter_ffmpeg/log_level.dart';
+import 'package:file_picker/file_picker.dart';
 
+import 'package:path_provider/path_provider.dart';
+import 'dart:developer' as developer;
 void main() {
   runApp(MyApp());
 }
@@ -61,19 +63,22 @@ class _MyHomePageState extends State<MyHomePage> {
   final _picker = ImagePicker();
 
   final FlutterFFmpeg _flutterFFmpeg = new FlutterFFmpeg();
+  final FlutterFFmpegConfig _flutterFFmpegConfig = new FlutterFFmpegConfig();
+
 
   Future getVideoPath() async {
-    PickedFile file = await _picker.getImage(source: ImageSource.gallery);
+    PickedFile file = await _picker.getVideo(source: ImageSource.gallery);
     setState(() {
       videoPath = file != null ? file.path : '';
     });
   }
 
   Future getAudioPath() async {
-    final path = await AudioPicker.pickAudio();
-    if (path != null && path.isNotEmpty) {
+
+    final path = await FilePicker.platform.pickFiles(type: FileType.audio);
+    if (path != null && path.files.length > 0) {
       setState(() {
-        audioPath = path;
+        audioPath =  path.files[0].path;
       });
     } else {
       // User canceled the picker
@@ -84,24 +89,18 @@ class _MyHomePageState extends State<MyHomePage> {
     if (audioPath.isEmpty || videoPath.isEmpty) return;
 
     final localPath = await _localPath;
-    final resultPath = '/storage/emulated/0/result2.mkv';
-    print('resultPath = $resultPath');
     var command = [
       //image
-      "-loop",
-      "1",
-      "-framerate",
-      "1",
-      //end
       "-i",
       videoPath,
       "-i",
       audioPath,
       //image
-      "-shortest",
-      "-c",
+      "-c:v",
       "copy",
-      resultPath
+      "-c:a",
+      "aac",
+      localPath
 
       //video
       // "-c:v",
@@ -122,7 +121,15 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<String> get _localPath async {
     final directory = await getExternalStorageDirectory();
 
-    return directory.path;
+    return File('${directory.path}/${DateTime.now().toString()}.mkv').path;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _flutterFFmpegConfig.logCallback = (log) {
+      developer.log('initState log ${log.message}', name: 'Main');
+    };
   }
 
   @override
@@ -149,9 +156,14 @@ class _MyHomePageState extends State<MyHomePage> {
                       builder: (context) => Center(
                             child: CircularProgressIndicator(),
                           ));
-                  final resultCode = await mixingVideo();
-                  Navigator.of(context).pop();
-                  print('resultCode = $resultCode');
+                  try {
+                    final resultCode = await mixingVideo();
+                    Navigator.of(context).pop();
+                    print('resultCode = $resultCode');
+                  } catch(error) {
+                    developer.log('build error $error', name: 'Main');
+                  }
+
                 },
                 child: Text("Mixing"))
           ],
